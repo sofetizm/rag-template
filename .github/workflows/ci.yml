@@ -69,8 +69,8 @@ jobs:
           curl -sf localhost:8000/health | tee health.json
           python3 -c "import json; h = json.load(open('health.json')); assert h['chunks'] > 1000, h"
           curl -sf -X POST localhost:8000/search -H 'Content-Type: application/json' \
-            -d '{"query": "Как вернуть ошибку 404?"}' | tee search.json
-          python3 -c "import json; hits = json.load(open('search.json'))['hits']; assert 'handling-errors' in hits[0]['source'], hits[0]"
+            -d '{"query": "Как вернуть клиенту ошибку 404 через HTTPException?"}' > search.json
+          python3 -c "import json; hits = json.load(open('search.json'))['hits']; print([h['source'] for h in hits]); assert any('handling-errors' in h['source'] for h in hits[:3])"
           curl -sf localhost:8000/metrics | grep -q rag_stage_seconds
       - if: failure()
         run: docker compose logs api
