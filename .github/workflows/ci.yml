@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.20.0
+        ports: ["6333:6333"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -e ".[dev,ml]"
+      - run: ruff check .
+      - run: pytest -q
+        env:
+          RAG_TEST_QDRANT_URL: http://localhost:6333
+
+  eval:
+    needs: test
+    runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.20.0
+        ports: ["6333:6333"]
+    env:
+      RAG_QDRANT_URL: http://localhost:6333
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ hashFiles('src/rag_template/config.py') }}
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -e ".[ml]"
+      - name: Index the demo corpus
+        run: rag ingest data/demo/fastapi-ru --base-url https://fastapi.tiangolo.com/ru/
+      - name: Retrieval quality gate
+        run: rag eval retrieval --out results/ci_retrieval.json --gate eval/gate.yaml
+      - name: Semantic cache check
+        run: rag eval cache --out results/ci_cache.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: results/ci_*.json
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the stack
+        run: docker compose up -d --build --wait --wait-timeout 600
+      - name: Smoke test
+        run: |
+          curl -sf localhost:8000/health | tee health.json
+          python3 -c "import json; h = json.load(open('health.json')); assert h['chunks'] > 1000, h"
+          curl -sf -X POST localhost:8000/search -H 'Content-Type: application/json' \
+            -d '{"query": "Как вернуть ошибку 404?"}' | tee search.json
+          python3 -c "import json; hits = json.load(open('search.json'))['hits']; assert 'handling-errors' in hits[0]['source'], hits[0]"
+          curl -sf localhost:8000/metrics | grep -q rag_stage_seconds
+      - if: failure()
+        run: docker compose logs api

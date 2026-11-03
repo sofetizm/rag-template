@@ -1,0 +1,59 @@
+# Параметры Cookie { #cookie-parameters }
+
+Вы можете задать параметры Cookie таким же способом, как `Query` и `Path` параметры.
+
+## Импорт `Cookie` { #import-cookie }
+
+Сначала импортируйте `Cookie`:
+
+```python
+from typing import Annotated
+
+from fastapi import Cookie, FastAPI
+
+app = FastAPI()
+
+@app.get("/items/")
+async def read_items(ads_id: Annotated[str | None, Cookie()] = None):
+    return {"ads_id": ads_id}
+```
+
+## Объявление параметров `Cookie` { #declare-cookie-parameters }
+
+Затем объявляйте параметры cookie, используя ту же структуру, что и с `Path` и `Query`.
+
+Вы можете задать значение по умолчанию, а также все дополнительные параметры валидации или аннотации:
+
+```python
+from typing import Annotated
+
+from fastapi import Cookie, FastAPI
+
+app = FastAPI()
+
+@app.get("/items/")
+async def read_items(ads_id: Annotated[str | None, Cookie()] = None):
+    return {"ads_id": ads_id}
+```
+
+**Технические детали:**
+
+`Cookie` - это класс, родственный `Path` и `Query`. Он также наследуется от общего класса `Param`.
+
+Но помните, что когда вы импортируете `Query`, `Path`, `Cookie` и другое из `fastapi`, это фактически функции, которые возвращают специальные классы.
+
+**Примечание:**
+
+Для объявления cookies, вам нужно использовать `Cookie`, иначе параметры будут интерпретированы как параметры запроса.
+
+**Примечание:**
+
+Имейте в виду, что, поскольку **браузеры обрабатывают cookies** особым образом и «за кулисами», они **не** позволяют **JavaScript** просто так получать к ним доступ.
+
+Если вы откроете **интерфейс документации API** на `/docs`, вы сможете увидеть **документацию** по cookies для ваших *операции пути*.
+
+Но даже если вы **заполните данные** и нажмёте «Execute», поскольку UI документации работает с **JavaScript**, cookies отправлены не будут, и вы увидите сообщение об **ошибке**, как будто вы не указали никаких значений.
+
+## Резюме { #recap }
+
+Объявляйте cookies с помощью `Cookie`, используя тот же общий шаблон, что и `Query`, и `Path`.

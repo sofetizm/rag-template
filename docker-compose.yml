@@ -1,0 +1,49 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.20.0
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      RAG_QDRANT_URL: http://qdrant:6333
+      RAG_CACHE_BACKEND: redis
+      RAG_REDIS_URL: redis://redis:6379/0
+      RAG_INGEST_ON_START: ${RAG_INGEST_ON_START:-data/demo/fastapi-ru}
+      RAG_INGEST_BASE_URL: ${RAG_INGEST_BASE_URL:-https://fastapi.tiangolo.com/ru/}
+      RAG_TRACE_LOG: /app/logs/traces.jsonl
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["monitoring"]
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+volumes:
+  qdrant_data:

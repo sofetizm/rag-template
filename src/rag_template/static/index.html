@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rag-template</title>
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --line: #e4e3de;
+  --accent: #0f766e; --accent-soft: #e6f2f0; --code: #f1f0ec; --bar: #0f766e; --warn: #b45309;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151614; --panel: #1d1f1c; --text: #ecebe6; --muted: #9a9a93; --line: #2f312d;
+    --accent: #5eead4; --accent-soft: #19302d; --code: #262824; --bar: #2dd4bf; --warn: #fbbf24; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 28px 16px 60px; }
+header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+.status { color: var(--muted); font-size: 13px; }
+form { display: flex; gap: 8px; flex-wrap: wrap; }
+input[type=text] { flex: 1 1 420px; min-width: 0; padding: 11px 14px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--panel); color: var(--text); font: inherit; }
+input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+select, button { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--text); font: inherit; }
+button { background: var(--accent); color: var(--panel); border-color: var(--accent); cursor: pointer; font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+.examples { margin: 10px 0 22px; display: flex; gap: 6px; flex-wrap: wrap; }
+.examples button { background: transparent; color: var(--muted); border: 1px dashed var(--line);
+  font-weight: 400; font-size: 13px; padding: 5px 10px; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; }
+#answer { min-height: 120px; overflow-wrap: anywhere; }
+#answer ul { margin: 0 0 10px; padding-left: 20px; }
+#answer p { margin: 0 0 10px; }
+#answer pre { background: var(--code); padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+pre code { background: none; padding: 0; }
+.cite { display: inline-block; min-width: 20px; text-align: center; font-size: 11px; font-weight: 700;
+  background: var(--accent-soft); color: var(--accent); border-radius: 6px; padding: 0 4px; text-decoration: none; margin: 0 1px; }
+.badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); margin-bottom: 10px; }
+.badge.warn { color: var(--warn); background: transparent; border: 1px solid var(--warn); }
+.source { padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.source:first-of-type { border-top: 0; padding-top: 0; }
+.source b { color: var(--accent); margin-right: 6px; }
+.source a { color: var(--text); }
+.source .score { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.source details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.source details pre { white-space: pre-wrap; font-size: 12px; background: var(--code); padding: 8px; border-radius: 6px; max-height: 220px; overflow: auto; }
+.stage { display: grid; grid-template-columns: 96px 1fr 64px; gap: 8px; align-items: center; font-size: 13px; margin: 6px 0; }
+.stage .track { height: 8px; background: var(--code); border-radius: 4px; overflow: hidden; }
+.stage .fill { height: 100%; background: var(--bar); border-radius: 4px; }
+.stage .ms { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; margin-top: 12px; }
+.kv span:nth-child(odd) { color: var(--muted); }
+.side { display: grid; gap: 18px; align-content: start; }
+.empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>rag-template</h1>
+    <span class="status" id="status">загрузка…</span>
+  </header>
+  <form id="form">
+    <input type="text" id="q" placeholder="Вопрос по документации" autocomplete="off" required>
+    <select id="mode" aria-label="Поиск">
+      <option value="hybrid|true">гибридный + реранкер</option>
+      <option value="hybrid|false">гибридный</option>
+      <option value="bm25|false">только BM25</option>
+      <option value="dense|false">только векторный</option>
+    </select>
+    <button id="go">Спросить</button>
+  </form>
+  <div class="examples" id="examples"></div>
+  <div class="grid">
+    <section class="card"><h2>Ответ</h2><div id="answer" class="empty">Задайте вопрос — ответ появится здесь со ссылками на источники.</div></section>
+    <div class="side">
+      <section class="card"><h2>Источники</h2><div id="sources" class="empty">—</div></section>
+      <section class="card"><h2>Трассировка</h2><div id="trace" class="empty">—</div></section>
+    </div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const EXAMPLES = ["Как сделать query-параметр обязательным?", "Чем Depends отличается от Security?",
+  "Как вернуть другой статус-код из эндпоинта?", "Как запустить FastAPI в Docker с несколькими воркерами?"];
+const esc = s => s.replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+function inline(s) {
+  return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\[(\d+(?:\s*[,;]\s*\d+)*)\]/g, (_, g) => g.split(/[,;]/).map(n => n.trim())
+      .map(n => `<a class="cite" href="#src-${n}">${n}</a>`).join(""));
+}
+function markdown(text) {
+  const parts = text.split(/```/);
+  return parts.map((part, i) => {
+    if (i % 2) { const body = part.replace(/^\w*\n/, ""); return `<pre><code>${esc(body)}</code></pre>`; }
+    return part.split(/\n{2,}/).filter(p => p.trim()).map(p => {
+      const lines = p.split("\n");
+      const h = p.match(/^#{1,6}\s+(.+)$/);
+      if (h && lines.length === 1) return `<p><b>${inline(h[1])}</b></p>`;
+      if (lines.every(l => /^\s*([-*]|\d+\.)\s/.test(l)))
+        return "<ul>" + lines.map(l => `<li>${inline(l.replace(/^\s*([-*]|\d+\.)\s/, ""))}</li>`).join("") + "</ul>";
+      return `<p>${inline(p).replace(/\n/g, "<br>")}</p>`;
+    }).join("");
+  }).join("");
+}
+function renderSources(sources) {
+  const box = $("sources");
+  if (!sources.length) { box.className = "empty"; box.textContent = "ничего не найдено"; return; }
+  box.className = "";
+  box.innerHTML = sources.map(s => {
+    const title = esc(s.title + (s.section ? " — " + s.section : ""));
+    const link = s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${title}</a>` : title;
+    const scores = Object.entries(s.scores || {}).map(([k, v]) => `${k} ${Number(v).toFixed(3)}`).join(" · ");
+    return `<div class="source" id="src-${s.n}"><b>${s.n}</b>${link}<div class="score">${esc(s.source)} · ${scores}</div>
+      <details><summary>фрагмент</summary><pre>${esc(s.text)}</pre></details></div>`;
+  }).join("");
+}
+function renderTrace(t, cached) {
+  const box = $("trace"); box.className = "";
+  const spans = (t.spans || []).filter(s => s.ms !== undefined);
+  const max = Math.max(...spans.map(s => s.ms), 1);
+  const rows = spans.map(s => `<div class="stage"><span>${esc(s.name)}</span>
+    <div class="track"><div class="fill" style="width:${Math.max(2, 100 * s.ms / max)}%"></div></div>
+    <span class="ms">${s.ms} мс</span></div>`).join("");
+  const u = t.usage || {};
+  box.innerHTML = rows + `<div class="kv">
+    <span>всего</span><span>${t.total_ms} мс</span>
+    <span>кэш</span><span>${cached || "нет"}</span>
+    <span>токены (вход / выход)</span><span>${u.prompt_tokens || 0} / ${u.completion_tokens || 0}</span>
+    <span>стоимость</span><span>$${(u.cost_usd || 0).toFixed(5)}</span>
+    <span>trace id</span><span>${esc(t.id || "")}</span></div>`;
+}
+async function ask(question) {
+  const [mode, rerank] = $("mode").value.split("|");
+  $("go").disabled = true;
+  $("answer").className = ""; $("answer").textContent = "…";
+  $("sources").className = "empty"; $("sources").textContent = "поиск…";
+  $("trace").className = "empty"; $("trace").textContent = "—";
+  let text = "";
+  try {
+    const res = await fetch("/ask/stream", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({question, mode, rerank: rerank === "true"})});
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+    while (true) {
+      const {done, value} = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (!line.startsWith("data:")) continue;
+        const ev = JSON.parse(line.slice(5));
+        if (ev.type === "sources") renderSources(ev.sources);
+        if (ev.type === "token") { text += ev.text; $("answer").innerHTML = markdown(text); }
+        if (ev.type === "error") throw new Error(ev.message);
+        if (ev.type === "done") {
+          $("answer").innerHTML = (ev.refused ? '<span class="badge warn">ответа нет в документации</span>' : "")
+            + (ev.cached ? `<span class="badge">из кэша: ${ev.cached}</span>` : "") + markdown(ev.text);
+          renderTrace(ev.trace, ev.cached);
+        }
+      }
+    }
+  } catch (e) {
+    $("answer").innerHTML = `<span class="badge warn">ошибка</span><p>${esc(String(e.message || e))}</p>`;
+  } finally { $("go").disabled = false; }
+}
+$("form").addEventListener("submit", e => { e.preventDefault(); ask($("q").value.trim()); });
+$("examples").innerHTML = EXAMPLES.map(q => `<button type="button">${esc(q)}</button>`).join("");
+$("examples").querySelectorAll("button").forEach(b => b.onclick = () => { $("q").value = b.textContent; ask(b.textContent); });
+fetch("/health").then(r => r.json()).then(h => {
+  $("status").textContent = `${h.documents} документов · ${h.chunks} фрагментов · ${h.retrieval} · ${h.llm}`;
+}).catch(() => { $("status").textContent = "сервер недоступен"; });
+</script>
+</body>
+</html>
